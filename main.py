@@ -3,6 +3,7 @@ import datetime
 import pandas as pd
 import re
 import perfonitor.data_treatment as data_treatment
+import snowflake_util as sf
 
 LAST_30_DAYS = list(pd.date_range(datetime.date.today() - datetime.timedelta(days=31), datetime.date.today()))
 LAST_30_DAYS = [date.date() for date in LAST_30_DAYS]
@@ -46,6 +47,52 @@ def validate_general_info_file(general_info_path, geography):
 
 
 def query_single_day_irradiance(selected_date):
+
+    query = ''' 
+    USE SCHEMA CURATED; 
+    create temporary table temp_measurement_dim2 as 
+    select 
+        S.SITE_KEY, 
+        D.DEVICE_KEY, 
+        M.MEASUREMENT_KEY, 
+        S.SITE_ID, 
+        D.DEVICE_ID, 
+        M.MEASUREMENT_ID, 
+        S.SITE_NAME, 
+        M.MEASUREMENT_NAME, 
+        M.MEASUREMENT_APCODE, 
+        S.COUNTRY, 
+        S.TYPE_OF_PROJECT, 
+        M.ENGINEERING_UNIT 
+    from 
+        CURATED.REP_DIM_SITES S 
+        INNER JOIN CURATED.REP_DIM_DEVICES D on S.SITE_KEY = D.SITE_FKEY 
+        INNER JOIN CURATED.DIM_MEASUREMENTS M on M.DEVICE_FKEY = D.DEVICE_KEY 
+    where 
+        SITE_NAME like '%Vendimia%' 
+        and SITE_KEY not in (462) 
+        and MEASUREMENT_APCODE in ( 
+            'EnergyExported60m', 
+            'EnergyForecastSessionTwo60m', 
+            'X1scadaSessionTwo','RelativeHumidity','AmbientAirTemperature' 
+        ) 
+    order by 
+        SITE_NAME, 
+        MEASUREMENT_APCODE; 
+    -- GET MEASUREMENT DIMENSIONS 
+    select * from temp_measurement_dim2; 
+    -- GET MEASUREMENTS 
+    select 
+        D.SITE_ID,D.MEASUREMENT_KEY, LOCAL_DATE, LOCAL_TIME, MDATE, MTIME, MEASUREMENT_VALUE_NUMERIC 
+    from 
+        temp_measurement_dim2 D 
+        inner join RAW.FACT_SITE_MEASUREMENTS SM on SM.SITE_KEY = D.SITE_KEY 
+        and SM.DEVICE_KEY = D.DEVICE_KEY 
+        and SM.MEASUREMENT_KEY = D.MEASUREMENT_KEY 
+        limit 1000 ; 
+    '''
+
+    get_query_results(query, results_location)
 
 
 
